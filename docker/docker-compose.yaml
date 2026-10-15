@@ -1,0 +1,22 @@
+services:
+  virt-who:
+    image: ghcr.io/pfurtschellerp/virt-who:latest
+    restart: unless-stopped
+    init: true
+    env_file:
+      - .env
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /run/libvirt:/run/libvirt:ro
+      - rhsm-log:/var/log/rhsm
+      - virt-who-state:/var/lib/virt-who
+    tmpfs:
+      - /tmp
+      - /run
+volumes:
+  rhsm-log:
+  virt-who-state:
