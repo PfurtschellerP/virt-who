@@ -1,0 +1,114 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "virt-who.fullname" . }}
+  labels:
+    {{- include "virt-who.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "virt-who.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "virt-who.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      affinity:
+        {{- with .Values.podAffinity }}
+        podAffinity:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with .Values.podAntiAffinity }}
+        podAntiAffinity:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: {{ required "computeNodeLabel must be a non-empty label key" .Values.computeNodeLabel | quote }}
+                    operator: Exists
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: virt-who
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          env:
+            - name: SATELLITE_ORG
+              value: {{ .Values.satellite.organization | quote }}
+            - name: SATELLITE_HOST
+              value: {{ .Values.satellite.host | quote }}
+            - name: SATELLITE_PORT
+              value: {{ .Values.satellite.port | quote }}
+            - name: SATELLITE_PREFIX
+              value: {{ .Values.satellite.prefix | quote }}
+            - name: RHSM_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ printf "%s-credentials" (include "virt-who.fullname" .) }}
+                  key: RHSM_USERNAME
+            - name: RHSM_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ printf "%s-credentials" (include "virt-who.fullname" .) }}
+                  key: RHSM_PASSWORD
+            - name: HYPERVISOR_ID
+              value: {{ .Values.virtWho.hypervisorId | quote }}
+            - name: LIBVIRT_SERVER
+              value: {{ .Values.virtWho.libvirtServer | quote }}
+            - name: VIRTWHO_INTERVAL_SECONDS
+              value: {{ .Values.virtWho.intervalSeconds | quote }}
+            - name: VIRTWHO_DEBUG
+              value: {{ .Values.virtWho.debug | ternary "1" "0" | quote }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: libvirt-socket
+              mountPath: /run/libvirt
+              readOnly: true
+            - name: runtime
+              mountPath: /run/virt-who
+            - name: rhsm-log
+              mountPath: /var/log/rhsm
+            - name: virt-who-state
+              mountPath: /var/lib/virt-who
+            {{- with .Values.volumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: libvirt-socket
+          hostPath:
+            path: /run/libvirt
+            type: Directory
+        - name: runtime
+          emptyDir: {}
+        - name: rhsm-log
+          emptyDir: {}
+        - name: virt-who-state
+          emptyDir: {}
+        {{- with .Values.volumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}

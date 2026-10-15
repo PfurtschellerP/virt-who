@@ -1,0 +1,53 @@
+image:
+  repository: ghcr.io/pfurtschellerp/virt-who
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# Nodes must have this label key; its value may be anything.
+computeNodeLabel: compute
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+satellite:
+  organization: replace-with-satellite-organization
+  host: satellite.example.com
+  port: 443
+  prefix: /rhsm
+
+rhsm:
+  username: replace-with-virt-who-reporter
+  password: replace-me
+
+virtWho:
+  hypervisorId: hostname
+  libvirtServer: qemu+unix:///system
+  intervalSeconds: 60
+  debug: false
+
+resources: {}
+
+# Additional node selection constraints, tolerations, or pod affinity rules.
+nodeSelector: {}
+tolerations: []
+podAffinity: {}
+podAntiAffinity: {}
+
+# Extra volumes and mounts can be used for site-specific configuration.
+volumes: []
+volumeMounts: []
