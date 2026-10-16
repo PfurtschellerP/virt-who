@@ -55,6 +55,7 @@ jobs:
             tags="${image}:latest"
           fi
 
+          echo "image=${image}" >> "$GITHUB_OUTPUT"
           echo "tags=${tags}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GitHub Container Registry
@@ -66,11 +67,37 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and publish image
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: ./image
           file: ./image/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.tags.outputs.tags }}
+          provenance: mode=max
+          sbom: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Install Cosign
+        if: github.event_name == 'push' && startsWith(github.ref_name, 'image-v')
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign released image
+        if: github.event_name == 'push' && startsWith(github.ref_name, 'image-v')
+        env:
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          IMAGE: ${{ steps.tags.outputs.image }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          test -n "$COSIGN_PRIVATE_KEY" || {
+            echo "COSIGN_PRIVATE_KEY repository secret is not configured" >&2
+            exit 1
+          }
+          test -n "$DIGEST" || {
+            echo "The image digest was not produced by the build" >&2
+            exit 1
+          }
+          cosign sign --yes --key env://COSIGN_PRIVATE_KEY "${IMAGE}@${DIGEST}"
