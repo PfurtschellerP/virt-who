@@ -39,6 +39,9 @@ Images and charts have independent release lifecycles. Versioned releases are
 immutable and are published only once; historical releases are not rebuilt by
 scheduled jobs.
 
+Pushing an artifact-specific tag also creates a GitHub Release with generated
+release notes and a link to the published GHCR artifact.
+
 ### Container image releases
 
 Create an image-specific tag and push it:
@@ -53,6 +56,8 @@ This publishes:
 ```text
 ghcr.io/pfurtschellerp/virt-who:1.32.2
 ```
+
+It also creates a GitHub Release named `Container image v1.32.2`.
 
 Changes pushed to `main` publish the moving `latest` image. Production
 deployments should use a version tag or, preferably, the image digest.
@@ -75,6 +80,8 @@ helm upgrade --install virt-who \
   oci://ghcr.io/pfurtschellerp/virt-who \
   --version 0.1.0
 ```
+
+It also creates a GitHub Release named `Helm chart v0.1.0`.
 
 The chart's `image.tag` defaults to `latest`. For reproducible deployments,
 override it with a versioned image tag or configure the image repository and
