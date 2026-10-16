@@ -4,86 +4,31 @@ on:
   pull_request:
     branches:
       - main
+    paths:
+      - image/**
+      - .github/workflows/publish-image.yaml
   push:
     branches:
       - main
+    paths:
+      - image/**
+      - .github/workflows/publish-image.yaml
     tags:
-      - "v*"
-  schedule:
-    - cron: "17 4 1 * *"
+      - "image-v*"
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  prepare:
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.refs.outputs.matrix }}
-    steps:
-      - name: Check out repository refs
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Select refs to build
-        id: refs
-        env:
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          set -euo pipefail
-          matrix="$(python3 - <<'PY'
-          import json
-          import os
-          import subprocess
-
-          event = os.environ["GITHUB_EVENT_NAME"]
-          ref = os.environ["GITHUB_REF"]
-
-          if event == "schedule":
-              version_tags = subprocess.run(
-                  ["git", "tag", "--list", "v*"],
-                  check=True,
-                  capture_output=True,
-                  text=True,
-              ).stdout.splitlines()
-              refs = [{"ref": "refs/heads/main", "kind": "main"}]
-              refs.extend(
-                  {"ref": f"refs/tags/{tag}", "kind": "version"}
-                  for tag in sorted(version_tags)
-              )
-          elif event == "pull_request":
-              refs = [{
-                  "ref": ref,
-                  "kind": "pr",
-                  "pr_number": os.environ["PR_NUMBER"],
-              }]
-          elif ref == "refs/heads/main":
-              refs = [{"ref": ref, "kind": "main"}]
-          elif ref.startswith("refs/tags/v"):
-              refs = [{"ref": ref, "kind": "version"}]
-          else:
-              raise SystemExit(f"No build configured for ref {ref}")
-
-          print(json.dumps({"include": refs}, separators=(",", ":")))
-          PY
-          )"
-          echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
-
   build:
-    needs: prepare
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-        with:
-          ref: ${{ matrix.ref }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -91,38 +36,29 @@ jobs:
       - name: Generate image tags
         id: tags
         env:
-          TARGET_KIND: ${{ matrix.kind }}
-          TARGET_REF: ${{ matrix.ref }}
-          PR_NUMBER: ${{ matrix.pr_number }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
           image="ghcr.io/$(printf '%s' "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')"
-          timestamp="$(date -u +'%Y%m%d-%H%M%S')"
 
-          if [[ "$TARGET_KIND" == "pr" ]]; then
-            tags=("${image}:pr-${PR_NUMBER}-${timestamp}")
-          elif [[ "$TARGET_KIND" == "main" ]]; then
-            tags=("${image}:latest" "${image}:latest-${timestamp}")
-          elif [[ "$TARGET_KIND" == "version" ]]; then
-            version="${TARGET_REF#refs/tags/v}"
-            if [[ ! "$version" =~ ^[0-9A-Za-z_][0-9A-Za-z_.-]{0,111}$ ]]; then
-              echo "Tag ${TARGET_REF} does not contain a valid image version" >&2
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            tags="${image}:pr-${GITHUB_EVENT_NUMBER}"
+          elif [[ "$REF_NAME" == image-v* ]]; then
+            version="${REF_NAME#image-v}"
+            if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+              echo "Tag ${REF_NAME} must contain a valid semantic version" >&2
               exit 1
             fi
-            tags=("${image}:${version}" "${image}:${version}-${timestamp}")
+            tags="${image}:${version}"
           else
-            echo "No image tags configured for ref ${GITHUB_REF}" >&2
-            exit 1
+            tags="${image}:latest"
           fi
 
-          {
-            echo "tags<<IMAGE_TAGS"
-            printf '%s\n' "${tags[@]}"
-            echo "IMAGE_TAGS"
-          } >> "$GITHUB_OUTPUT"
+          echo "tags=${tags}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GitHub Container Registry
-        if: matrix.kind != 'pr'
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -134,7 +70,7 @@ jobs:
         with:
           context: ./image
           file: ./image/Dockerfile
-          push: ${{ matrix.kind != 'pr' }}
+          push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.tags.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

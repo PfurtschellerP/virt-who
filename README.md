@@ -25,6 +25,53 @@ helm upgrade --install virt-who ./charts/virt-who \
   --set rhsm.password=YOUR_REPORTER_PASSWORD
 ```
 
+## Releases
+
+Images and charts have independent release lifecycles. Versioned releases are
+immutable and are published only once; historical releases are not rebuilt by
+scheduled jobs.
+
+### Container image releases
+
+Create an image-specific tag and push it:
+
+```sh
+git tag image-v1.32.2
+git push origin image-v1.32.2
+```
+
+This publishes:
+
+```text
+ghcr.io/pfurtschellerp/virt-who:1.32.2
+```
+
+Changes pushed to `main` publish the moving `latest` image. Production
+deployments should use a version tag or, preferably, the image digest.
+
+### Helm chart releases
+
+Create a chart-specific tag and push it:
+
+```sh
+git tag chart-virt-who-v0.1.0
+git push origin chart-virt-who-v0.1.0
+```
+
+The workflow derives the Helm chart version from the tag, so
+`charts/virt-who/Chart.yaml` does not need to be edited for every release.
+The chart is published to GHCR as an OCI artifact:
+
+```sh
+helm upgrade --install virt-who \
+  oci://ghcr.io/pfurtschellerp/virt-who \
+  --version 0.1.0
+```
+
+The chart's `image.tag` defaults to `latest`. For reproducible deployments,
+override it with a versioned image tag or configure the image repository and
+digest in your deployment values.
+
 ## Sources
 
 - [virt-who GitHub repository](https://github.com/candlepin/virt-who)
