@@ -1,5 +1,13 @@
 # Containerized virt-who Agent
 
+[![Image build](https://img.shields.io/github/actions/workflow/status/PfurtschellerP/virt-who/publish-image.yaml?branch=main&label=image%20build&logo=github)](https://github.com/PfurtschellerP/virt-who/actions/workflows/publish-image.yaml)
+[![Chart validation](https://img.shields.io/github/actions/workflow/status/PfurtschellerP/virt-who/validate-chart.yaml?branch=main&label=chart%20validation&logo=helm)](https://github.com/PfurtschellerP/virt-who/actions/workflows/validate-chart.yaml)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/PfurtschellerP/virt-who/badge)](https://securityscorecards.dev/viewer/?uri=github.com/PfurtschellerP/virt-who)
+[![License](https://img.shields.io/github/license/PfurtschellerP/virt-who)](https://github.com/PfurtschellerP/virt-who/blob/main/LICENSE)
+[![GitHub last commit](https://img.shields.io/github/last-commit/PfurtschellerP/virt-who)](https://github.com/PfurtschellerP/virt-who/commits/main)
+[![Docker](https://img.shields.io/badge/container-GHCR-2496ED?logo=docker&logoColor=white)](https://github.com/PfurtschellerP/virt-who/pkgs/container/virt-who)
+[![Helm](https://img.shields.io/badge/Helm-OCI-0F1689?logo=helm&logoColor=white)](https://github.com/PfurtschellerP/virt-who/pkgs/container/virt-who)
+
 This repository contains Dockerfiles and Helm charts for deploying the virt-who agent in a containerized environment. The virt-who agent is responsible for reporting virtual machine information to the subscription management service.
 
 ## Contents
