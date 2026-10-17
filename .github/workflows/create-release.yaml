@@ -64,6 +64,7 @@ jobs:
           fi
 
           {
+            echo "tag=${REF_NAME}"
             echo "title=${title}"
             echo "artifact=${artifact}"
             echo "prerelease=${prerelease}"
@@ -72,13 +73,14 @@ jobs:
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
           RELEASE_TITLE: ${{ steps.release.outputs.title }}
           ARTIFACT: ${{ steps.release.outputs.artifact }}
           PRERELEASE: ${{ steps.release.outputs.prerelease }}
         run: |
           set -euo pipefail
           args=(
-            "$GITHUB_REF_NAME"
+            "$RELEASE_TAG"
             --verify-tag
             --title "$RELEASE_TITLE"
             --generate-notes
