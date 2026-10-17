@@ -67,8 +67,8 @@ deployments should use a version tag or, preferably, the image digest.
 Create a chart-specific tag and push it:
 
 ```sh
-git tag chart-virt-who-v0.1.0
-git push origin chart-virt-who-v0.1.0
+git tag chart-v0.1.0
+git push origin chart-v0.1.0
 ```
 
 The workflow derives the Helm chart version from the tag, so

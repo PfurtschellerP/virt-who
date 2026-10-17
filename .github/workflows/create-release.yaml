@@ -4,7 +4,7 @@ on:
   push:
     tags:
       - "image-v*"
-      - "chart-virt-who-v*"
+      - "chart-v*"
 
 permissions:
   contents: read
@@ -29,8 +29,8 @@ jobs:
               title="Container image v${version}"
               artifact="ghcr.io/${REPOSITORY,,}:${version}"
               ;;
-            chart-virt-who-v*)
-              version="${REF_NAME#chart-virt-who-v}"
+            chart-v*)
+              version="${REF_NAME#chart-v}"
               title="Helm chart v${version}"
               artifact="oci://ghcr.io/${REPOSITORY,,}/virt-who (version ${version})"
               ;;
