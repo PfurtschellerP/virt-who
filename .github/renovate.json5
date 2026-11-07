@@ -1,0 +1,92 @@
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: [
+    // Recommended defaults plus digest pinning for actions and images.
+    'config:best-practices',
+    // Keep the conventional commit style used so far: build(deps): ...
+    ':semanticCommits',
+    ':semanticCommitTypeAll(build)',
+    // Refresh transitive Python test dependencies weekly.
+    ':maintainLockFilesWeekly',
+  ],
+  // Same cadence as Dependabot before: Monday morning (UTC).
+  schedule: ['* 0-4 * * 1'],
+  labels: ['dependencies'],
+  // The recommended preset ignores **/tests/**, which holds the pinned
+  // Python test dependencies; none of the other default paths exist here.
+  ignorePaths: [],
+  osvVulnerabilityAlerts: true,
+
+  // tests/requirements.txt is compiled from tests/requirements.in with uv;
+  // Renovate re-runs the command recorded in its header.
+  'pip-compile': {
+    managerFilePatterns: ['/(^|/)tests/requirements\\.txt$/'],
+  },
+  pip_requirements: {
+    enabled: false,
+  },
+
+  customManagers: [
+    {
+      customType: 'regex',
+      description: 'Container images the justfile runs linters and tests in',
+      managerFilePatterns: ['/(^|/)justfile$/'],
+      matchStrings: [
+        '"(?<depName>[a-z0-9.-]+\\.[a-z]{2,}/[a-z0-9._/-]+):(?<currentValue>[A-Za-z0-9._-]+)(?:@(?<currentDigest>sha256:[a-f0-9]{64}))?"',
+      ],
+      datasourceTemplate: 'docker',
+      autoReplaceStringTemplate: '"{{depName}}:{{newValue}}{{#if newDigest}}@{{newDigest}}{{/if}}"',
+    },
+    {
+      customType: 'regex',
+      description: 'virt-who RPM installed into the image (Rocky Linux 10 AppStream keeps only the current build)',
+      managerFilePatterns: ['/(^|/)image/Dockerfile$/'],
+      matchStrings: ['ARG VIRT_WHO_VERSION=(?<currentValue>\\S+)'],
+      depNameTemplate: 'virt-who',
+      datasourceTemplate: 'rpm',
+      registryUrlTemplate: 'https://dl.rockylinux.org/pub/rocky/10/AppStream/x86_64/os/repodata/',
+      // Releases are reported as <version>-<release>, e.g. 1.32.1-2.el10.
+      extractVersionTemplate: '^(?<version>[^-]+)',
+      versioningTemplate: 'loose',
+    },
+  ],
+
+  packageRules: [
+    {
+      description: 'Group GitHub Actions updates',
+      matchManagers: ['github-actions'],
+      groupName: 'GitHub Actions',
+    },
+    {
+      description: 'Update the base image and the virt-who RPM together: the repository only serves the current RPM build',
+      matchFileNames: ['image/Dockerfile'],
+      groupName: 'container image',
+    },
+    {
+      description: 'Group the justfile tool images',
+      matchManagers: ['custom.regex'],
+      matchFileNames: ['justfile'],
+      groupName: 'CI tool images',
+    },
+    {
+      description: 'Group Python test dependencies',
+      matchManagers: ['pip-compile'],
+      groupName: 'Python test dependencies',
+    },
+    {
+      description: 'Tests must run on the Python version shipped in the Rocky Linux 10 base image',
+      matchDepNames: ['docker.io/library/python'],
+      allowedVersions: '<3.13',
+    },
+    {
+      description: 'Images and charts published by this repository are released through scripts/release.sh',
+      matchDepNames: ['ghcr.io/pfurtschellerp/**'],
+      enabled: false,
+    },
+    {
+      description: 'Give new releases a few days before adopting them (supply-chain safety)',
+      matchDatasources: ['github-tags', 'github-releases', 'pypi'],
+      minimumReleaseAge: '3 days',
+    },
+  ],
+}
