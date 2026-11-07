@@ -43,12 +43,11 @@ def ini_value(name: str, value: str) -> str:
         raise ValueError(f"{name} must not contain line breaks")
     if value != value.strip():
         raise ValueError(f"{name} must not have leading or trailing whitespace")
-    # virt-who strips one pair of matching surrounding quotes from values.
-    if (
-        len(value) >= 2
-        and value[0] in ("'", '"')
-        and value[-1] == value[0]
-        and value.count(value[0]) == 2
+    # virt-who strips matching surrounding quotes from a value that does not
+    # contain that quote anywhere else (this includes a lone quote character).
+    if any(
+        value.startswith(quote) and value.endswith(quote) and quote not in value[1:-1]
+        for quote in ("'", '"')
     ):
         raise ValueError(
             f"{name} cannot start and end with the same quote; "

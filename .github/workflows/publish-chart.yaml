@@ -159,3 +159,6 @@ jobs:
       tag: ${{ needs.publish.outputs.tag }}
       artifact: oci://${{ needs.publish.outputs.chart }} --version ${{ needs.publish.outputs.version }}
       digest: ${{ needs.publish.outputs.digest }}
+    secrets:
+      COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+      COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}

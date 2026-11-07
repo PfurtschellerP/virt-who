@@ -17,14 +17,15 @@ hadolint := "docker.io/hadolint/hadolint:v2.14.0"
 shellcheck := "docker.io/koalaman/shellcheck:v0.11.0"
 ruff := "ghcr.io/astral-sh/ruff:0.17.4"
 kubeconform := "ghcr.io/yannh/kubeconform:v0.8.0"
+python := "docker.io/library/python:3.12-slim"
 
 # List available recipes
 [private]
 default:
     @just --list --unsorted
 
-# Run all linters and chart tests
-check: lint chart-test
+# Run all linters and tests
+check: lint test chart-test
 
 # Lint workflows, shell scripts, the Dockerfile and Python code
 lint: lint-actions lint-shell lint-dockerfile lint-python
@@ -43,12 +44,19 @@ lint-dockerfile:
 
 # Lint and format-check Python code
 lint-python:
-    {{ run }} {{ ruff }} check --no-cache image/
-    {{ run }} {{ ruff }} format --no-cache --check --diff image/
+    {{ run }} {{ ruff }} check --no-cache image/ tests/
+    {{ run }} {{ ruff }} format --no-cache --check --diff image/ tests/
 
 # Format Python code in place
 fmt:
-    {{ container }} run --rm --security-opt label=disable -v {{ quote(justfile_directory()) }}:/src -w /src {{ ruff }} format --no-cache image/
+    {{ container }} run --rm --security-opt label=disable -v {{ quote(justfile_directory()) }}:/src -w /src {{ ruff }} format --no-cache image/ tests/
+
+# Run the Python unit and property-based (fuzz) tests
+test:
+    {{ container }} run --rm --security-opt label=disable -v {{ quote(justfile_directory()) }}:/src:ro -w /src \
+      -e PYTHONDONTWRITEBYTECODE=1 {{ python }} sh -euc \
+      'pip install --quiet --disable-pip-version-check --root-user-action=ignore --require-hashes -r tests/requirements.txt \
+       && python -m pytest -p no:cacheprovider tests'
 
 # Lint the Helm chart
 chart-lint:

@@ -19,10 +19,15 @@ on:
         required: false
         type: string
         default: ""
+    secrets:
+      COSIGN_PRIVATE_KEY:
+        required: true
+      COSIGN_PASSWORD:
+        required: false
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing image-v* or chart-v* tag to release
+        description: Existing image-v* or chart-v* tag to release (existing releases get their signed assets refreshed)
         required: true
         type: string
 
@@ -37,6 +42,7 @@ jobs:
       contents: write
     steps:
       - name: Create GitHub release
+        id: release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -51,13 +57,15 @@ jobs:
             image-v*)
               version="${TAG#image-v}"
               title="Container image v${version}"
-              artifact="${ARTIFACT:-ghcr.io/${GITHUB_REPOSITORY,,}:${version}}"
+              ref="ghcr.io/${GITHUB_REPOSITORY,,}:${version}"
+              artifact="${ARTIFACT:-${ref}}"
               usage="docker pull ${artifact}"
               ;;
             chart-v*)
               version="${TAG#chart-v}"
               title="Helm chart v${version}"
-              artifact="${ARTIFACT:-oci://ghcr.io/${owner}/charts/virt-who --version ${version}}"
+              ref="ghcr.io/${owner}/charts/virt-who:${version}"
+              artifact="${ARTIFACT:-oci://${ref%:*} --version ${version}}"
               usage="helm upgrade --install virt-who ${artifact}"
               ;;
             *)
@@ -71,17 +79,36 @@ jobs:
             exit 1
           fi
 
+          if [[ -z "$DIGEST" ]]; then
+            DIGEST="$(docker buildx imagetools inspect "$ref" --format '{{json .Manifest}}' | jq -r .digest)"
+          fi
+          if [[ ! "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            echo "::error::Could not determine the digest of ${ref}"
+            exit 1
+          fi
+
+          kind="${TAG%%-v*}"
+          manifest="virt-who-${kind}-${version}.json"
+          {
+            echo "manifest=${manifest}"
+            echo "ref=${ref}"
+            echo "digest=${DIGEST}"
+          } >> "$GITHUB_OUTPUT"
+
           notes="$(mktemp)"
           {
             echo '```sh'
             echo "$usage"
             echo '```'
-            if [[ -n "$DIGEST" ]]; then
-              echo
-              echo "Digest: \`${DIGEST}\`"
-            fi
+            echo
+            echo "Digest: \`${DIGEST}\`"
             echo
             echo "Signatures can be verified with [\`cosign.pub\`](https://github.com/${GITHUB_REPOSITORY}/blob/main/cosign.pub)."
+            echo "The attached \`${manifest}\` records the published digest and is signed as well:"
+            echo
+            echo '```sh'
+            echo "cosign verify-blob --key cosign.pub --signature ${manifest}.sig ${manifest}"
+            echo '```'
           } > "$notes"
 
           # Only compare against previous releases of the same artifact.
@@ -97,7 +124,40 @@ jobs:
           fi
 
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release ${TAG} already exists, nothing to do"
+            echo "Release ${TAG} already exists, only refreshing its assets"
           else
             gh release create "${args[@]}"
           fi
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v3.9.0
+
+      - name: Attach signed release manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          TAG: ${{ inputs.tag }}
+          MANIFEST: ${{ steps.release.outputs.manifest }}
+          REF: ${{ steps.release.outputs.ref }}
+          DIGEST: ${{ steps.release.outputs.digest }}
+        run: |
+          set -euo pipefail
+          test -n "$COSIGN_PRIVATE_KEY" || {
+            echo "::error::COSIGN_PRIVATE_KEY repository secret is not configured"
+            exit 1
+          }
+          commit="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${TAG}" --jq .sha)"
+          jq -n \
+            --arg tag "$TAG" \
+            --arg ref "$REF" \
+            --arg digest "$DIGEST" \
+            --arg repository "https://github.com/${GITHUB_REPOSITORY}" \
+            --arg commit "$commit" \
+            '{tag: $tag, artifact: $ref, digest: $digest, source: {repository: $repository, commit: $commit}}' \
+            > "$MANIFEST"
+          cat "$MANIFEST"
+          cosign sign-blob --yes --key env://COSIGN_PRIVATE_KEY \
+            --output-signature "${MANIFEST}.sig" "$MANIFEST"
+          gh release upload "$TAG" "$MANIFEST" "${MANIFEST}.sig" --clobber
