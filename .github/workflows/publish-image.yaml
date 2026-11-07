@@ -143,7 +143,7 @@ jobs:
 
       - name: Install Cosign
         if: github.ref_type == 'tag'
-        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.0
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v3.9.0
 
       - name: Sign released image
         if: github.ref_type == 'tag'
