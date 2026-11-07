@@ -1,0 +1,40 @@
+# Exercises most optional settings of the chart in CI.
+image:
+  digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+computeNodeLabel: ""
+satellite:
+  organization: example
+  host: satellite.example.com
+  port: 8443
+rhsm:
+  existingSecret: virt-who-credentials
+  usernameKey: username
+  passwordKey: password
+virtWho:
+  hypervisorId: uuid
+  intervalSeconds: 3600
+  debug: true
+extraEnv:
+  - name: HTTPS_PROXY
+    value: http://proxy.example.com:3128
+priorityClassName: system-node-critical
+podSecurityContext:
+  seccompProfile:
+    type: RuntimeDefault
+  seLinuxOptions:
+    type: spc_t
+nodeSelector:
+  node-role.kubernetes.io/worker: ""
+tolerations:
+  - operator: Exists
+podAnnotations:
+  example.com/annotation: "true"
+volumes:
+  - name: ca
+    configMap:
+      name: satellite-ca
+volumeMounts:
+  - name: ca
+    mountPath: /etc/rhsm/ca/katello-server-ca.pem
+    subPath: katello-server-ca.pem
+    readOnly: true

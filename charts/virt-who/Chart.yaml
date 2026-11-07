@@ -1,5 +1,26 @@
 apiVersion: v2
 name: virt-who
-description: A Helm chart for deploying the virt-who agent on Kubernetes.
+description: Run the virt-who agent on Kubernetes nodes acting as KVM/libvirt hypervisors and report their guests to Red Hat Satellite.
 type: application
+# The chart version is injected from the `chart-v<version>` git tag when the
+# chart is packaged by CI. Do not bump it manually.
 version: 0.0.0
+# Container image version deployed by default (image tag without the
+# `image-v` prefix). Updated through a pull request after an image release.
+appVersion: "0.1.0"
+kubeVersion: ">=1.25.0-0"
+home: https://github.com/PfurtschellerP/virt-who
+sources:
+  - https://github.com/PfurtschellerP/virt-who
+  - https://github.com/candlepin/virt-who
+keywords:
+  - virt-who
+  - satellite
+  - subscription-manager
+  - libvirt
+  - kvm
+maintainers:
+  - name: Patrick Pfurtscheller
+    url: https://github.com/PfurtschellerP
+annotations:
+  artifacthub.io/license: GPL-2.0-or-later

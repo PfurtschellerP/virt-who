@@ -7,26 +7,41 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app.kubernetes.io/name: {{ include "virt-who.name" . }}
-      app.kubernetes.io/instance: {{ .Release.Name }}
+      {{- include "virt-who.selectorLabels" . | nindent 6 }}
+  {{- with .Values.updateStrategy }}
+  updateStrategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   template:
     metadata:
-      {{- with .Values.podAnnotations }}
       annotations:
+        {{- if not .Values.rhsm.existingSecret }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- end }}
+        {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
       labels:
         {{- include "virt-who.labels" . | nindent 8 }}
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
     spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . | quote }}
+      {{- end }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- with .Values.podSecurityContext }}
       securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if or .Values.computeNodeLabel .Values.podAffinity .Values.podAntiAffinity }}
       affinity:
         {{- with .Values.podAffinity }}
         podAffinity:
@@ -36,12 +51,15 @@ spec:
         podAntiAffinity:
           {{- toYaml . | nindent 10 }}
         {{- end }}
+        {{- with .Values.computeNodeLabel }}
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
               - matchExpressions:
-                  - key: {{ required "computeNodeLabel must be a non-empty label key" .Values.computeNodeLabel | quote }}
+                  - key: {{ . | quote }}
                     operator: Exists
+        {{- end }}
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
@@ -52,15 +70,17 @@ spec:
       {{- end }}
       containers:
         - name: virt-who
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          image: {{ include "virt-who.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.containerSecurityContext }}
           securityContext:
-            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           env:
             - name: SATELLITE_ORG
-              value: {{ .Values.satellite.organization | quote }}
+              value: {{ required "satellite.organization is required" .Values.satellite.organization | quote }}
             - name: SATELLITE_HOST
-              value: {{ .Values.satellite.host | quote }}
+              value: {{ required "satellite.host is required" .Values.satellite.host | quote }}
             - name: SATELLITE_PORT
               value: {{ .Values.satellite.port | quote }}
             - name: SATELLITE_PREFIX
@@ -68,13 +88,13 @@ spec:
             - name: RHSM_USERNAME
               valueFrom:
                 secretKeyRef:
-                  name: {{ printf "%s-credentials" (include "virt-who.fullname" .) }}
-                  key: RHSM_USERNAME
+                  name: {{ include "virt-who.secretName" . }}
+                  key: {{ .Values.rhsm.usernameKey }}
             - name: RHSM_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ printf "%s-credentials" (include "virt-who.fullname" .) }}
-                  key: RHSM_PASSWORD
+                  name: {{ include "virt-who.secretName" . }}
+                  key: {{ .Values.rhsm.passwordKey }}
             - name: HYPERVISOR_ID
               value: {{ .Values.virtWho.hypervisorId | quote }}
             - name: LIBVIRT_SERVER
@@ -83,14 +103,22 @@ spec:
               value: {{ .Values.virtWho.intervalSeconds | quote }}
             - name: VIRTWHO_DEBUG
               value: {{ .Values.virtWho.debug | ternary "1" "0" | quote }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.resources }}
           resources:
-            {{- toYaml .Values.resources | nindent 12 }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           volumeMounts:
+            # /run holds the rendered config (/run/virt-who) and the PID file.
+            - name: run
+              mountPath: /run
             - name: libvirt-socket
               mountPath: /run/libvirt
               readOnly: true
-            - name: runtime
-              mountPath: /run/virt-who
+            - name: tmp
+              mountPath: /tmp
             - name: rhsm-log
               mountPath: /var/log/rhsm
             - name: virt-who-state
@@ -99,16 +127,25 @@ spec:
             {{- toYaml . | nindent 12 }}
             {{- end }}
       volumes:
+        - name: run
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Mi
         - name: libvirt-socket
           hostPath:
-            path: /run/libvirt
+            path: {{ .Values.libvirtSocketDir | quote }}
             type: Directory
-        - name: runtime
-          emptyDir: {}
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+        # virt-who always writes rhsm.log in addition to stdout; the file is
+        # not rotated, so cap its size.
         - name: rhsm-log
-          emptyDir: {}
+          emptyDir:
+            sizeLimit: 128Mi
         - name: virt-who-state
-          emptyDir: {}
+          emptyDir:
+            sizeLimit: 16Mi
         {{- with .Values.volumes }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
