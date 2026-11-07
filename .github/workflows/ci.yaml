@@ -12,6 +12,10 @@ on:
 permissions:
   contents: read
 
+env:
+  # Runners ship podman too; images are built and loaded with Docker Buildx.
+  CONTAINER_ENGINE: docker
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
