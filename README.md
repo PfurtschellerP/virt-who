@@ -161,6 +161,8 @@ just image-build     # build the image locally
 just image-test      # smoke-test an image (no libvirt or Satellite needed)
 ```
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how to propose changes.
+
 ## Releasing
 
 The image and the chart are versioned independently with
