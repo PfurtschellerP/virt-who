@@ -1,0 +1,92 @@
+name: Bug report
+description: Something does not work with the container image, the Helm chart or the Compose example.
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug.
+
+        > [!CAUTION]
+        > **Do not paste credentials.** Redact `RHSM_PASSWORD`, Secret contents, tokens and anything else sensitive from configuration and logs.
+        > Security vulnerabilities must be [reported privately](https://github.com/PfurtschellerP/virt-who/security/advisories/new) instead.
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Container image
+        - Helm chart
+        - Docker / Podman Compose example
+        - Release tooling or CI
+        - Documentation
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Image tag or digest and/or chart version you are using.
+      placeholder: "image 0.2.0, chart 0.2.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: How and where virt-who runs.
+      value: |
+        - Deployment (Kubernetes + version / Docker / Podman + version):
+        - Hypervisor host OS and version:
+        - SELinux mode (enforcing / permissive / disabled):
+        - libvirt version:
+        - Satellite version:
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Commands, `helm` invocation or `docker run` / Compose setup that triggers the problem.
+      placeholder: |
+        1. helm upgrade --install virt-who ... --set ...
+        2. kubectl -n virt-who logs ds/virt-who
+    validations:
+      required: true
+
+  - type: textarea
+    id: configuration
+    attributes:
+      label: Configuration (redacted)
+      description: Relevant Helm values or environment variables, **with credentials removed**.
+      render: yaml
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs (redacted)
+      description: "Container logs, ideally with `VIRTWHO_DEBUG=1` (chart value `virtWho.debug: true`). **Remove credentials.**"
+      render: text
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched the existing issues and this is not a duplicate.
+          required: true
+        - label: I removed passwords, tokens and other secrets from everything above.
+          required: true
