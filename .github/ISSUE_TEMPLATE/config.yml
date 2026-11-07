@@ -6,6 +6,3 @@ contact_links:
   - name: Bug in virt-who itself
     url: https://github.com/candlepin/virt-who/issues
     about: Problems with virt-who's own behaviour (not the image, chart or configuration) belong upstream.
-  - name: Red Hat Satellite support
-    url: https://access.redhat.com/support
-    about: Satellite, subscription or entitlement questions are best answered by Red Hat support.
