@@ -12,12 +12,12 @@ run := container + " run --rm --security-opt label=disable -v " + quote(justfile
 chart := "charts/virt-who"
 dev_image := "localhost/virt-who:dev"
 
-actionlint := "docker.io/rhysd/actionlint:1.7.12"
-hadolint := "docker.io/hadolint/hadolint:v2.14.0"
-shellcheck := "docker.io/koalaman/shellcheck:v0.11.0"
-ruff := "ghcr.io/astral-sh/ruff:0.17.4"
-kubeconform := "ghcr.io/yannh/kubeconform:v0.8.0"
-python := "docker.io/library/python:3.12-slim"
+actionlint := "docker.io/rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667"
+hadolint := "docker.io/hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d"
+shellcheck := "docker.io/koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d"
+ruff := "ghcr.io/astral-sh/ruff:0.17.4@sha256:c4b7e7a87e4b07d66b569dd2e6b2ce5a25e38be91dd664dc49b9882be27acd9b"
+kubeconform := "ghcr.io/yannh/kubeconform:v0.8.0@sha256:faffaf43f95aa6425306e1ab8d6fcad72acb9049158f38e574c085ea1ec0f64e"
+python := "docker.io/library/python:3.12-slim@sha256:4840d514c583a4d3d8cad3940e68dee6f0f6f3635c12fcd0a3d74c21a5b93a54"
 
 # List available recipes
 [private]
