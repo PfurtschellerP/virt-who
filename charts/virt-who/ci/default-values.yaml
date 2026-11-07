@@ -1,0 +1,7 @@
+# Minimal values used by CI to render and validate the chart.
+satellite:
+  organization: example
+  host: satellite.example.com
+rhsm:
+  username: reporter
+  password: not-a-real-password

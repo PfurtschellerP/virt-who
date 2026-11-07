@@ -1,46 +1,91 @@
+# Default values for the virt-who chart.
+# See values.schema.json for the full set of validated options.
+
 image:
   repository: ghcr.io/pfurtschellerp/virt-who
+  # Image tag. Defaults to the chart's appVersion.
+  tag: ""
+  # Image digest (e.g. sha256:...). Takes precedence over the tag when set.
+  digest: ""
   pullPolicy: IfNotPresent
-  tag: "latest"
 
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
-# Nodes must have this label key; its value may be anything.
+# virt-who pods are scheduled on every node that has this label key; its value
+# is ignored. Set to "" to disable the node affinity and rely on nodeSelector,
+# tolerations or the default scheduling instead.
 computeNodeLabel: compute
+
+# Satellite / Candlepin connection.
+satellite:
+  # Organization label (owner) the hypervisors are reported to. Required.
+  organization: ""
+  # Satellite or Capsule host name. Required.
+  host: ""
+  port: 443
+  prefix: /rhsm
+
+# Credentials of the Satellite user reporting virt-who data.
+rhsm:
+  # Use an existing Secret instead of creating one from username/password.
+  existingSecret: ""
+  # Keys inside the Secret.
+  usernameKey: RHSM_USERNAME
+  passwordKey: RHSM_PASSWORD
+  # Required unless existingSecret is set.
+  username: ""
+  password: ""
+
+virtWho:
+  # How hypervisors are identified: hostname, uuid or hwuuid.
+  hypervisorId: hostname
+  libvirtServer: qemu+unix:///system
+  # Interval between reports in seconds (virt-who enforces at least 60).
+  intervalSeconds: 60
+  debug: false
+
+# Host directory containing the libvirt sockets.
+libvirtSocketDir: /run/libvirt
+
+# Additional environment variables for the virt-who container.
+extraEnv: []
 
 podAnnotations: {}
 podLabels: {}
 
+priorityClassName: ""
+terminationGracePeriodSeconds: 30
+
+updateStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 1
+
 podSecurityContext:
   seccompProfile:
     type: RuntimeDefault
+  # On SELinux-enforcing nodes the default container_t type is not allowed to
+  # connect to the libvirt socket. Use a type that permits it, e.g.:
+  # seLinuxOptions:
+  #   type: spc_t
 
 containerSecurityContext:
+  # virt-who needs root to access the libvirt system socket.
+  runAsUser: 0
   allowPrivilegeEscalation: false
   readOnlyRootFilesystem: true
   capabilities:
     drop:
       - ALL
 
-satellite:
-  organization: replace-with-satellite-organization
-  host: satellite.example.com
-  port: 443
-  prefix: /rhsm
-
-rhsm:
-  username: replace-with-virt-who-reporter
-  password: replace-me
-
-virtWho:
-  hypervisorId: hostname
-  libvirtServer: qemu+unix:///system
-  intervalSeconds: 60
-  debug: false
-
-resources: {}
+resources:
+  requests:
+    cpu: 10m
+    memory: 64Mi
+  limits:
+    memory: 256Mi
 
 # Additional node selection constraints, tolerations, or pod affinity rules.
 nodeSelector: {}

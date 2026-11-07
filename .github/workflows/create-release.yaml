@@ -1,14 +1,28 @@
 name: Create GitHub release
 
+# Called by the publish workflows once an artifact has been published
+# successfully. Can also be run manually to (re-)create a missing release.
 on:
-  push:
-    tags:
-      - "image-v*"
-      - "chart-v*"
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag (image-v<version> or chart-v<version>)
+        required: true
+        type: string
+      artifact:
+        description: Published artifact reference
+        required: false
+        type: string
+        default: ""
+      digest:
+        description: Digest of the published artifact
+        required: false
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing image or chart tag to release
+        description: Existing image-v* or chart-v* tag to release
         required: true
         type: string
 
@@ -17,76 +31,73 @@ permissions:
 
 jobs:
   release:
+    name: Create release
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ inputs.tag || github.ref }}
-
-      - name: Determine release details
-        id: release
+      - name: Create GitHub release
         env:
-          REF_NAME: ${{ inputs.tag || github.ref_name }}
-          REPOSITORY: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+          ARTIFACT: ${{ inputs.artifact }}
+          DIGEST: ${{ inputs.digest }}
         run: |
           set -euo pipefail
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
 
-          case "$REF_NAME" in
+          case "$TAG" in
             image-v*)
-              version="${REF_NAME#image-v}"
+              version="${TAG#image-v}"
               title="Container image v${version}"
-              artifact="ghcr.io/${REPOSITORY,,}:${version}"
+              artifact="${ARTIFACT:-ghcr.io/${GITHUB_REPOSITORY,,}:${version}}"
+              usage="docker pull ${artifact}"
               ;;
             chart-v*)
-              version="${REF_NAME#chart-v}"
+              version="${TAG#chart-v}"
               title="Helm chart v${version}"
-              artifact="oci://ghcr.io/${REPOSITORY,,}/virt-who (version ${version})"
+              artifact="${ARTIFACT:-oci://ghcr.io/${owner}/charts/virt-who --version ${version}}"
+              usage="helm upgrade --install virt-who ${artifact}"
               ;;
             *)
-              echo "Unsupported release tag: ${REF_NAME}" >&2
+              echo "::error::Unsupported release tag: ${TAG}"
               exit 1
               ;;
           esac
 
-          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
-            echo "Tag ${REF_NAME} must contain a valid semantic version" >&2
+          if [[ ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Tag ${TAG} must contain a valid semantic version"
             exit 1
           fi
 
-          prerelease=false
-          if [[ "$version" == *-alpha* ||
-                "$version" == *-beta* ||
-                "$version" == *-rc* ]]; then
-            prerelease=true
-          fi
-
+          notes="$(mktemp)"
           {
-            echo "tag=${REF_NAME}"
-            echo "title=${title}"
-            echo "artifact=${artifact}"
-            echo "prerelease=${prerelease}"
-          } >> "$GITHUB_OUTPUT"
+            echo '```sh'
+            echo "$usage"
+            echo '```'
+            if [[ -n "$DIGEST" ]]; then
+              echo
+              echo "Digest: \`${DIGEST}\`"
+            fi
+            echo
+            echo "Signatures can be verified with [\`cosign.pub\`](https://github.com/${GITHUB_REPOSITORY}/blob/main/cosign.pub)."
+          } > "$notes"
 
-      - name: Create GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ steps.release.outputs.tag }}
-          RELEASE_TITLE: ${{ steps.release.outputs.title }}
-          ARTIFACT: ${{ steps.release.outputs.artifact }}
-          PRERELEASE: ${{ steps.release.outputs.prerelease }}
-        run: |
-          set -euo pipefail
-          args=(
-            "$RELEASE_TAG"
-            --verify-tag
-            --title "$RELEASE_TITLE"
-            --generate-notes
-            --notes "Published artifact: \`${ARTIFACT}\`"
-          )
-          if [[ "$PRERELEASE" == "true" ]]; then
+          # Only compare against previous releases of the same artifact.
+          previous="$(gh api "repos/${GITHUB_REPOSITORY}/tags" --paginate --jq '.[].name' \
+            | grep "^${TAG%%-v*}-v" | grep -vx "$TAG" | sort -V | tail -n 1 || true)"
+
+          args=("$TAG" --verify-tag --title "$title" --notes-file "$notes" --generate-notes)
+          if [[ -n "$previous" ]]; then
+            args+=(--notes-start-tag "$previous")
+          fi
+          if [[ "$version" == *-* ]]; then
             args+=(--prerelease)
           fi
-          gh release create "${args[@]}"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release ${TAG} already exists, nothing to do"
+          else
+            gh release create "${args[@]}"
+          fi

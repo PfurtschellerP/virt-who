@@ -1,0 +1,13 @@
+virt-who is reporting to {{ .Values.satellite.host }} (organization "{{ .Values.satellite.organization }}").
+
+Image: {{ include "virt-who.image" . }}
+{{- if .Values.computeNodeLabel }}
+Nodes: every node labelled with "{{ .Values.computeNodeLabel }}", e.g.
+
+  kubectl label node <node> {{ .Values.computeNodeLabel }}=true
+{{- end }}
+
+Check the agents:
+
+  kubectl --namespace {{ .Release.Namespace }} get pods -l app.kubernetes.io/instance={{ .Release.Name }} -o wide
+  kubectl --namespace {{ .Release.Namespace }} logs -l app.kubernetes.io/instance={{ .Release.Name }} --tail=50

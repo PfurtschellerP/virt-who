@@ -1,6 +1,10 @@
+# Run virt-who directly on a standalone KVM host.
+#
+#   cp .env.example .env   # then edit .env
+#   docker compose up -d   # or: podman compose up -d
 services:
   virt-who:
-    image: ghcr.io/pfurtschellerp/virt-who:latest
+    image: ghcr.io/pfurtschellerp/virt-who:${VIRT_WHO_IMAGE_TAG:-latest}
     restart: unless-stopped
     init: true
     env_file:
@@ -10,6 +14,9 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
+      # Required on SELinux-enforcing hosts (RHEL, Rocky, Alma, Fedora): the
+      # default container label may not connect to the libvirt socket.
+      - label:disable
     volumes:
       - /run/libvirt:/run/libvirt:ro
       - rhsm-log:/var/log/rhsm
@@ -17,6 +24,7 @@ services:
     tmpfs:
       - /tmp
       - /run
+
 volumes:
   rhsm-log:
   virt-who-state:

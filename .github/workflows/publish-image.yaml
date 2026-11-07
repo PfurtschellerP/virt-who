@@ -6,12 +6,14 @@ on:
       - main
     paths:
       - image/**
+      - justfile
       - .github/workflows/publish-image.yaml
   push:
     branches:
       - main
     paths:
       - image/**
+      - justfile
       - .github/workflows/publish-image.yaml
     tags:
       - "image-v*"
@@ -20,41 +22,91 @@ on:
 permissions:
   contents: read
 
+env:
+  # Runners ship podman too; images are built and loaded with Docker Buildx.
+  CONTAINER_ENGINE: docker
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build:
+    name: Build, test and publish
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+    outputs:
+      tag: ${{ github.ref_name }}
+      version: ${{ steps.version.outputs.version }}
+      image: ${{ steps.version.outputs.image }}
+      digest: ${{ steps.push.outputs.digest }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Determine image version
+        id: version
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          echo "image=${image}" >> "$GITHUB_OUTPUT"
+
+          if [[ "$REF_TYPE" != tag ]]; then
+            exit 0
+          fi
+
+          version="${REF_NAME#image-v}"
+          if [[ ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Tag ${REF_NAME} must be image-v<semver>"
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Release tags must point to a commit on main"
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up just
+        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.0.0
 
-      - name: Generate image tags
-        id: tags
+      - name: Build image for testing
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.0.0
+        with:
+          context: ./image
+          load: true
+          tags: virt-who:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test image
+        run: just image-test virt-who:test
+
+      - name: Generate image metadata
+        id: meta
         if: github.event_name != 'pull_request'
-        env:
-          REF_NAME: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          image="ghcr.io/$(printf '%s' "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')"
-
-          if [[ "$REF_NAME" == image-v* ]]; then
-            version="${REF_NAME#image-v}"
-            if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
-              echo "Tag ${REF_NAME} must contain a valid semantic version" >&2
-              exit 1
-            fi
-            tags="${image}:${version}"
-          else
-            tags="${image}:latest"
-          fi
-
-          echo "image=${image}" >> "$GITHUB_OUTPUT"
-          echo "tags=${tags}" >> "$GITHUB_OUTPUT"
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ steps.version.outputs.image }}
+          flavor: latest=false
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=short,enable={{is_default_branch}}
+            type=semver,pattern={{version}},value=${{ steps.version.outputs.version }},enable=${{ github.ref_type == 'tag' }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.version }},enable=${{ github.ref_type == 'tag' }}
+          labels: |
+            org.opencontainers.image.title=virt-who
+            org.opencontainers.image.licenses=GPL-2.0-or-later
 
       - name: Log in to GitHub Container Registry
         if: github.event_name != 'pull_request'
@@ -64,38 +116,78 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and publish image
-        id: build
+      - name: Refuse to overwrite a published version
+        if: github.ref_type == 'tag'
+        env:
+          REF: ${{ steps.version.outputs.image }}:${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          if docker buildx imagetools inspect "$REF" >/dev/null 2>&1; then
+            echo "::error::${REF} already exists; released versions are immutable"
+            exit 1
+          fi
+
+      - name: Publish image
+        id: push
+        if: github.event_name != 'pull_request'
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.0.0
         with:
           context: ./image
-          file: ./image/Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.tags.outputs.tags || '' }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
           provenance: mode=max
           sbom: true
           cache-from: type=gha
-          cache-to: type=gha,mode=max
 
       - name: Install Cosign
-        if: github.event_name == 'push' && startsWith(github.ref_name, 'image-v')
+        if: github.ref_type == 'tag'
         uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.0
 
       - name: Sign released image
-        if: github.event_name == 'push' && startsWith(github.ref_name, 'image-v')
+        if: github.ref_type == 'tag'
         env:
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
           COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
-          IMAGE: ${{ steps.tags.outputs.image }}
-          DIGEST: ${{ steps.build.outputs.digest }}
+          IMAGE: ${{ steps.version.outputs.image }}
+          DIGEST: ${{ steps.push.outputs.digest }}
         run: |
           set -euo pipefail
           test -n "$COSIGN_PRIVATE_KEY" || {
-            echo "COSIGN_PRIVATE_KEY repository secret is not configured" >&2
+            echo "::error::COSIGN_PRIVATE_KEY repository secret is not configured"
             exit 1
           }
           test -n "$DIGEST" || {
-            echo "The image digest was not produced by the build" >&2
+            echo "::error::The image digest was not produced by the build"
             exit 1
           }
           cosign sign --yes --key env://COSIGN_PRIVATE_KEY "${IMAGE}@${DIGEST}"
+
+      - name: Summary
+        if: github.event_name != 'pull_request'
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          {
+            echo "### Published image"
+            echo
+            echo "Digest: \`${DIGEST}\`"
+            echo
+            echo '```'
+            echo "$TAGS"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  release:
+    name: GitHub release
+    needs: build
+    if: github.ref_type == 'tag'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/create-release.yaml
+    with:
+      tag: ${{ needs.build.outputs.tag }}
+      artifact: ${{ needs.build.outputs.image }}:${{ needs.build.outputs.version }}
+      digest: ${{ needs.build.outputs.digest }}

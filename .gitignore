@@ -1,2 +1,7 @@
 *.env
 *.key
+
+# Build and tool output
+dist/
+.ruff_cache/
+__pycache__/
