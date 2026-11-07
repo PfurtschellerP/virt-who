@@ -7,7 +7,7 @@ pull requests are all welcome.
 
 ## Reporting issues
 
-- **Bugs, feature requests and questions:** open an
+- **Bugs and feature requests:** open an
   [issue](https://github.com/PfurtschellerP/virt-who/issues/new/choose) using
   one of the templates.
 - **Security vulnerabilities:** report them privately as described in
@@ -84,12 +84,12 @@ hand. If you add a dependency, pin it the same way as the existing ones:
 
 - **GitHub Actions** by full commit SHA with the version as a comment, e.g.
   `actions/checkout@<sha> # v7.0.1`.
-- **Container images** by tag, plus digest where the file already uses one
-  (`image/Dockerfile`).
+- **Container images** by tag and digest, e.g. `image:1.2.3@sha256:<digest>`
+  (the `Dockerfile` and the tool images in the `justfile`).
 - **Python test dependencies** in `tests/requirements.in`, then regenerate the
   hash-pinned lock file from the `tests/` directory with exactly the command
   recorded in the header of `tests/requirements.txt`.
-- **workflow permissions** least-privilege: `contents: read` at the top level,
+- **Workflow permissions** least-privilege: `contents: read` at the top level,
   anything more only on the job that needs it.
 
 ### Commit messages and pull request titles
