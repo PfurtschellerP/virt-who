@@ -107,7 +107,7 @@ jobs:
             echo "The attached \`${manifest}\` records the published digest and is signed as well:"
             echo
             echo '```sh'
-            echo "cosign verify-blob --key cosign.pub --signature ${manifest}.sig ${manifest}"
+            echo "cosign verify-blob --key cosign.pub --bundle ${manifest}.sigstore.json ${manifest}"
             echo '```'
           } > "$notes"
 
@@ -159,5 +159,5 @@ jobs:
             > "$MANIFEST"
           cat "$MANIFEST"
           cosign sign-blob --yes --key env://COSIGN_PRIVATE_KEY \
-            --output-signature "${MANIFEST}.sig" "$MANIFEST"
-          gh release upload "$TAG" "$MANIFEST" "${MANIFEST}.sig" --clobber
+            --bundle "${MANIFEST}.sigstore.json" "$MANIFEST"
+          gh release upload "$TAG" "$MANIFEST" "${MANIFEST}.sigstore.json" --clobber

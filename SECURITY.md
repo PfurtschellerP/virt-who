@@ -31,5 +31,5 @@ manifest that records the published digest and source commit:
 
 ```sh
 cosign verify-blob --key cosign.pub \
-  --signature virt-who-image-<version>.json.sig virt-who-image-<version>.json
+  --bundle virt-who-image-<version>.json.sigstore.json virt-who-image-<version>.json
 ```
