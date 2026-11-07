@@ -23,3 +23,15 @@ updates:
       docker-dependencies:
         patterns:
           - "*"
+
+  - package-ecosystem: pip
+    directory: /tests
+    schedule:
+      interval: weekly
+      day: monday
+      time: "03:30"
+    open-pull-requests-limit: 5
+    groups:
+      python-test-dependencies:
+        patterns:
+          - "*"

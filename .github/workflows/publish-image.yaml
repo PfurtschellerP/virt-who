@@ -191,3 +191,6 @@ jobs:
       tag: ${{ needs.build.outputs.tag }}
       artifact: ${{ needs.build.outputs.image }}:${{ needs.build.outputs.version }}
       digest: ${{ needs.build.outputs.digest }}
+    secrets:
+      COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+      COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}

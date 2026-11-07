@@ -25,3 +25,11 @@ Released images and charts are signed with the key in [`cosign.pub`](cosign.pub)
 cosign verify --key cosign.pub ghcr.io/pfurtschellerp/virt-who:<version>
 cosign verify --key cosign.pub ghcr.io/pfurtschellerp/charts/virt-who:<version>
 ```
+
+Each GitHub release also carries a signed `virt-who-<image|chart>-<version>.json`
+manifest that records the published digest and source commit:
+
+```sh
+cosign verify-blob --key cosign.pub \
+  --signature virt-who-image-<version>.json.sig virt-who-image-<version>.json
+```

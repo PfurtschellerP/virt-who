@@ -153,8 +153,9 @@ to be installed.
 
 ```sh
 just                 # list all recipes
-just check           # run all linters and chart tests (same as CI)
+just check           # run all linters, Python tests and chart tests (same as CI)
 just lint            # actionlint, shellcheck, hadolint, ruff
+just test            # pytest + Hypothesis property-based (fuzz) tests
 just chart-test      # helm lint, render, kubeconform and negative tests
 just image-build     # build the image locally
 just image-test      # smoke-test an image (no libvirt or Satellite needed)
