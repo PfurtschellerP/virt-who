@@ -37,6 +37,18 @@
       datasourceTemplate: 'docker',
       autoReplaceStringTemplate: '"{{depName}}:{{newValue}}{{#if newDigest}}@{{newDigest}}{{/if}}"',
     },
+    {
+      customType: 'regex',
+      description: 'virt-who RPM installed into the image (Rocky Linux 10 AppStream keeps only the current build)',
+      managerFilePatterns: ['/(^|/)image/Dockerfile$/'],
+      matchStrings: ['ARG VIRT_WHO_VERSION=(?<currentValue>\\S+)'],
+      depNameTemplate: 'virt-who',
+      datasourceTemplate: 'rpm',
+      registryUrlTemplate: 'https://dl.rockylinux.org/pub/rocky/10/AppStream/x86_64/os/repodata/',
+      // Releases are reported as <version>-<release>, e.g. 1.32.1-2.el10.
+      extractVersionTemplate: '^(?<version>[^-]+)',
+      versioningTemplate: 'loose',
+    },
   ],
 
   packageRules: [
@@ -44,6 +56,11 @@
       description: 'Group GitHub Actions updates',
       matchManagers: ['github-actions'],
       groupName: 'GitHub Actions',
+    },
+    {
+      description: 'Update the base image and the virt-who RPM together: the repository only serves the current RPM build',
+      matchFileNames: ['image/Dockerfile'],
+      groupName: 'container image',
     },
     {
       description: 'Group the justfile tool images',
